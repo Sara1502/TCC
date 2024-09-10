@@ -6,6 +6,10 @@ from matplotlib import pyplot as plt
 import kagglehub
 
 
+gpus = tf.config.experimental.list_physical_devices('GPU')
+for gpu in gpus:
+    tf.config.experimental.set_memory_growth(gpu, True)
+
 
 model = hub.load("https://www.kaggle.com/models/google/movenet/TensorFlow2/multipose-lightning/1")
 movenet = model.signatures['serving_default']
@@ -68,13 +72,13 @@ def draw_connections(frame, keypoints, edges, confidence_threshold):
 
 
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture('ive.mp4')
 while cap.isOpened():
     ret, frame = cap.read()
 
     # Colocar a imagem no tamanho certo
     img = frame.copy()
-    img = tf.image.resize_with_pad(tf.expand_dims(img, axis=0), 256,256)
+    img = tf.image.resize_with_pad(tf.expand_dims(img, axis=0), 352,640)
     input_img = tf.cast(img, dtype=tf.int32)
 
     # Detecção
@@ -88,5 +92,6 @@ while cap.isOpened():
 
     if cv2.waitKey(10) & 0xFF==ord('q'):
         break
+
 cap.release()
 cv2.destroyAllWindows()
