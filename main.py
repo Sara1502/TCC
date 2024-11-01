@@ -5,15 +5,9 @@ import cv2
 from matplotlib import pyplot as plt
 import kagglehub
 
-
-gpus = tf.config.experimental.list_physical_devices('GPU')
-for gpu in gpus:
-    tf.config.experimental.set_memory_growth(gpu, True)
-
-
+# Model selection (adjust based on your needs)
 model = hub.load("https://www.kaggle.com/models/google/movenet/TensorFlow2/multipose-lightning/1")
 movenet = model.signatures['serving_default']
-
 
 
 def loop_through_people(frame, keypoints_with_score, edges, confidence_threshold):
@@ -22,20 +16,16 @@ def loop_through_people(frame, keypoints_with_score, edges, confidence_threshold
         draw_keypoints(frame, person, confidence_threshold)
 
 
-
-# Desenha keypoints
 def draw_keypoints(frame, keypoints, confidence_threshold):
     y, x, c = frame.shape
-    shaped = np.squeeze(np.multiply(keypoints, [y,x,1]))
+    shaped = np.squeeze(np.multiply(keypoints, [y, x, 1]))
 
     for kp in shaped:
         ky, kx, kp_conf = kp
         if kp_conf > confidence_threshold:
-            cv2.circle(frame, (int(kx), int(ky)), 4, (0,255,0), -1)
+            cv2.circle(frame, (int(kx), int(ky)), 4, (0, 255, 0), -1)
 
 
-
-# Desenha cantos
 EDGES = {
     (0,1): 'm',
     (0,2): 'c',
@@ -59,8 +49,8 @@ EDGES = {
 
 
 def draw_connections(frame, keypoints, edges, confidence_threshold):
-    y,x,c = frame.shape
-    shaped = np.squeeze(np.multiply(keypoints, [y,x,1]))
+    y, x, c = frame.shape
+    shaped = np.squeeze(np.multiply(keypoints, [y, x, 1]))
 
     for edge, color in edges.items():
         p1, p2 = edge
@@ -68,29 +58,33 @@ def draw_connections(frame, keypoints, edges, confidence_threshold):
         y2, x2, c2 = shaped[p2]
 
         if (c1 > confidence_threshold) & (c2 > confidence_threshold):
-            cv2.line(frame, (int(x1), int(y1)), (int(x2), int(x2)), (0,0,255), 2)
-
+            cv2.line(frame, (int(x1), int(y1)), (int(x2), int(x2)), (0, 0, 255), 2)
 
 
 cap = cv2.VideoCapture('ive.mp4')
 while cap.isOpened():
     ret, frame = cap.read()
 
-    # Colocar a imagem no tamanho certo
+    # Preprocessing
     img = frame.copy()
-    img = tf.image.resize_with_pad(tf.expand_dims(img, axis=0), 352,640)
-    input_img = tf.cast(img, dtype=tf.int32)
+    # Experiment with different sizes and resizing methods
+    img = tf.image.resize(tf.expand_dims(img, axis=0), (224, 224), preserve_aspect_ratio=True)
+    # Normalize pixel values (if necessary)
+    img = tf.cast(img, dtype=tf.float32) / 255.0
 
-    # Detecção
-    result = movenet(input_img)
-    keypoints_with_score = result['output_0'].numpy()[:,:,:51].reshape((6, 17, 3))
+    # Detection
+    result = movenet(img)
+    keypoints_with_score = result['output_0'].numpy()[:, :, :51].reshape((6, 17, 3))
+
+    # Print keypoints for debugging (optional)
+    print(keypoints_with_score)
 
     # Renderiza keypoints
     loop_through_people(frame, keypoints_with_score, EDGES, 0.3)
 
     cv2.imshow("Movenet Multipose", frame)
 
-    if cv2.waitKey(10) & 0xFF==ord('q'):
+    if cv2.waitKey(10) & 0xFF == ord('q'):
         break
 
 cap.release()
