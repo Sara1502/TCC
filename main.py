@@ -5,7 +5,7 @@ import cv2
 from matplotlib import pyplot as plt
 import kagglehub
 
-# Model selection (adjust based on your needs)
+
 model = hub.load("https://www.kaggle.com/models/google/movenet/TensorFlow2/multipose-lightning/1")
 movenet = model.signatures['serving_default']
 
@@ -61,7 +61,7 @@ def draw_connections(frame, keypoints, edges, confidence_threshold):
             cv2.line(frame, (int(x1), int(y1)), (int(x2), int(x2)), (0, 0, 255), 2)
 
 
-cap = cv2.VideoCapture('ive.mp4')
+cap = cv2.VideoCapture('Kpop_Dance_Practice\6_pessoas\Crossroads\Crossroads.mp4')
 while cap.isOpened():
     ret, frame = cap.read()
 
