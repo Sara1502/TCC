@@ -1,3 +1,5 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
 import tensorflow_hub as hub
 import numpy as np
@@ -6,25 +8,16 @@ from matplotlib import pyplot as plt
 import kagglehub
 
 
-model = hub.load("https://www.kaggle.com/models/google/movenet/TensorFlow2/multipose-lightning/1")
+
+
+
+# Substitua pelo caminho para a pasta que contém 'saved_model.pb' e 'variables'
+caminho_para_o_modelo = "model"
+
+# Carregar o modelo
+
+model = tf.saved_model.load(caminho_para_o_modelo)
 movenet = model.signatures['serving_default']
-
-
-def loop_through_people(frame, keypoints_with_score, edges, confidence_threshold):
-    for person in keypoints_with_score:
-        draw_connections(frame, person, edges, confidence_threshold)
-        draw_keypoints(frame, person, confidence_threshold)
-
-
-def draw_keypoints(frame, keypoints, confidence_threshold):
-    y, x, c = frame.shape
-    shaped = np.squeeze(np.multiply(keypoints, [y, x, 1]))
-
-    for kp in shaped:
-        ky, kx, kp_conf = kp
-        if kp_conf > confidence_threshold:
-            cv2.circle(frame, (int(kx), int(ky)), 4, (0, 255, 0), -1)
-
 
 EDGES = {
     (0,1): 'm',
@@ -47,6 +40,21 @@ EDGES = {
     (14,16):'c'
 }
 
+def loop_through_people(frame, keypoints_with_score, edges, confidence_threshold):
+    for person in keypoints_with_score:
+        draw_connections(frame, person, edges, confidence_threshold)
+        draw_keypoints(frame, person, confidence_threshold)
+
+
+def draw_keypoints(frame, keypoints, confidence_threshold):
+    y, x, c = frame.shape
+    shaped = np.squeeze(np.multiply(keypoints, [y, x, 1]))
+
+    for kp in shaped:
+        ky, kx, kp_conf = kp
+        if kp_conf > confidence_threshold:
+            cv2.circle(frame, (int(kx), int(ky)), 4, (0, 255, 0), -1)
+
 
 def draw_connections(frame, keypoints, edges, confidence_threshold):
     y, x, c = frame.shape
@@ -58,22 +66,21 @@ def draw_connections(frame, keypoints, edges, confidence_threshold):
         y2, x2, c2 = shaped[p2]
 
         if (c1 > confidence_threshold) & (c2 > confidence_threshold):
-            cv2.line(frame, (int(x1), int(y1)), (int(x2), int(x2)), (0, 0, 255), 2)
+            cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 4)
 
-
-cap = cv2.VideoCapture('Kpop_Dance_Practice\6_pessoas\Crossroads\Crossroads.mp4')
+cap = cv2.VideoCapture('Kpop-Dance-Practice\\8-pessoas\\Thanxx\\Thanxx.mp4')
 while cap.isOpened():
     ret, frame = cap.read()
 
-    # Preprocessing
     img = frame.copy()
-    # Experiment with different sizes and resizing methods
-    img = tf.image.resize(tf.expand_dims(img, axis=0), (224, 224), preserve_aspect_ratio=True)
-    # Normalize pixel values (if necessary)
-    img = tf.cast(img, dtype=tf.float32) / 255.0
+    input_height, input_width = 192, 192  # Ajuste de acordo com a resolução esperada
+    img_resized = cv2.resize(img, (input_width, input_height))
+    img_input = tf.expand_dims(img_resized, axis=0)  # Adiciona a dimensão do batch (1, height, width, 3)
+    img_input = tf.cast(img_input, dtype=tf.int32)
+
 
     # Detection
-    result = movenet(img)
+    result = movenet(img_input)
     keypoints_with_score = result['output_0'].numpy()[:, :, :51].reshape((6, 17, 3))
 
     # Print keypoints for debugging (optional)
