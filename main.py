@@ -5,11 +5,14 @@ import tensorflow_hub as hub
 import numpy as np
 import cv2
 from matplotlib import pyplot as plt
-import kagglehub
+from typing import List, Tuple
+from statistics import mean
+import mediapipe as mp
 
+EXIST_FLAG = "-n"
 
-
-
+mp_draw = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
 
 # Substitua pelo caminho para a pasta que contém 'saved_model.pb' e 'variables'
 caminho_para_o_modelo = "model"
@@ -68,7 +71,7 @@ def draw_connections(frame, keypoints, edges, confidence_threshold):
         if (c1 > confidence_threshold) & (c2 > confidence_threshold):
             cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 4)
 
-cap = cv2.VideoCapture('Kpop-Dance-Practice\\8-pessoas\\Thanxx\\Thanxx.mp4')
+cap = cv2.VideoCapture('Kpop-Dance-Practice\\4-pessoas\\Hip\\Hip.mp4')
 while cap.isOpened():
     ret, frame = cap.read()
 
@@ -89,10 +92,8 @@ while cap.isOpened():
     # Renderiza keypoints
     loop_through_people(frame, keypoints_with_score, EDGES, 0.3)
 
-    cv2.imshow("Movenet Multipose", frame)
-
+    cv2.imshow("Movenet Multipose", frame)    
     if cv2.waitKey(10) & 0xFF == ord('q'):
-        break
-
+         break
 cap.release()
 cv2.destroyAllWindows()
