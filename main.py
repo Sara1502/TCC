@@ -5,14 +5,11 @@ import tensorflow_hub as hub
 import numpy as np
 import cv2
 from matplotlib import pyplot as plt
-from typing import List, Tuple
-from statistics import mean
-import mediapipe as mp
+import kagglehub
 
-EXIST_FLAG = "-n"
 
-mp_draw = mp.solutions.drawing_utils
-mp_pose = mp.solutions.pose
+
+
 
 # Substitua pelo caminho para a pasta que contém 'saved_model.pb' e 'variables'
 caminho_para_o_modelo = "model"
@@ -51,7 +48,13 @@ def loop_through_people(frame, keypoints_with_score, edges, confidence_threshold
 
 def draw_keypoints(frame, keypoints, confidence_threshold):
     y, x, c = frame.shape
-    shaped = np.squeeze(np.multiply(keypoints, [y, x, 1]))
+    input_height, input_width = 192, 192  # Ajuste para o tamanho da entrada do modelo
+    shaped = np.squeeze(np.multiply(keypoints, [input_height, input_width, 1]))
+
+    # Ajuste os keypoints para o tamanho real do frame
+    shaped[:, 0] *= y / input_height  # Ajusta a altura dos keypoints
+    shaped[:, 1] *= x / input_width   # Ajusta a largura dos keypoints
+
 
     for kp in shaped:
         ky, kx, kp_conf = kp
@@ -61,8 +64,13 @@ def draw_keypoints(frame, keypoints, confidence_threshold):
 
 def draw_connections(frame, keypoints, edges, confidence_threshold):
     y, x, c = frame.shape
-    shaped = np.squeeze(np.multiply(keypoints, [y, x, 1]))
+    input_height, input_width = 192, 192  # Ajuste para o tamanho da entrada do modelo
+    shaped = np.squeeze(np.multiply(keypoints, [input_height, input_width, 1]))
 
+    # Ajuste os keypoints para o tamanho real do frame
+    shaped[:, 0] *= y / input_height  # Ajusta a altura dos keypoints
+    shaped[:, 1] *= x / input_width   # Ajusta a largura dos keypoints
+        
     for edge, color in edges.items():
         p1, p2 = edge
         y1, x1, c1 = shaped[p1]
@@ -90,10 +98,12 @@ while cap.isOpened():
     print(keypoints_with_score)
 
     # Renderiza keypoints
-    loop_through_people(frame, keypoints_with_score, EDGES, 0.3)
+    loop_through_people(frame, keypoints_with_score, EDGES, 0.2)
 
-    cv2.imshow("Movenet Multipose", frame)    
+    cv2.imshow("Movenet Multipose", frame)
+
     if cv2.waitKey(10) & 0xFF == ord('q'):
-         break
+        break
+
 cap.release()
 cv2.destroyAllWindows()
