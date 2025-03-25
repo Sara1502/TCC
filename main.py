@@ -8,8 +8,6 @@ from matplotlib import pyplot as plt
 
 
 
-
-
 # Substitua pelo caminho para a pasta que contém 'saved_model.pb' e 'variables'
 caminho_para_o_modelo = "model"
 
