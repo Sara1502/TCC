@@ -109,7 +109,7 @@ def calcular_angulo_3pontos(a, b, c):
     return np.degrees(np.arccos(np.clip(cosine_angle, -1.0, 1.0)))
 
 
-def avaliar_sincronia_grupo(keypoints, limiar_percent=10):
+def avaliarSincroniaGrupo(keypoints, limiar_percent=10):
     if keypoints is None or keypoints.shape[0] < 2:
         return 100  # Retorna 100% se não há pessoas suficientes para comparar
 
@@ -276,7 +276,67 @@ def detectar_acrobacia(keypoints_with_score, frame_shape, frame=None, debug=Fals
 
 
 
+def detectarTrocaPosicao(keypoints, frame_shape, threshold_overlap=0.3, threshold_speed=0.1):
+    """
+    Detecta trocas de posição incluindo sobreposição e movimento rápido.
+    Corrige o erro de verificação de arrays NumPy.
+    """
+    if len(keypoints) < 2:
+        return False
 
+    # 1. Calcula bounding boxes e centros
+    bboxes = []
+    centros = []
+    for pessoa in keypoints:
+        # Verificação CORRETA de keypoints dos quadris
+        quadril_esq = pessoa[11] if pessoa[11][2] > 0.3 else None
+        quadril_dir = pessoa[12] if pessoa[12][2] > 0.3 else None
+        
+        # Modificação crucial: verifica se os arrays existem antes de usar
+        if quadril_esq is not None and quadril_dir is not None:
+            centro_x = (quadril_esq[1] + quadril_dir[1]) / 2
+            centro_y = (quadril_esq[0] + quadril_dir[0]) / 2
+            centros.append((centro_x, centro_y))
+            
+            # Bounding box baseada em todos os keypoints válidos
+            pontos_validos = [kp[:2] for kp in pessoa if kp[2] > 0.3]
+            if pontos_validos:
+                x_coords = [p[1] for p in pontos_validos]
+                y_coords = [p[0] for p in pontos_validos]
+                bboxes.append((min(x_coords), min(y_coords), max(x_coords), max(y_coords)))
+
+    # 2. Verifica sobreposição
+    overlap_detectado = False
+    for i in range(len(bboxes)):
+        for j in range(i+1, len(bboxes)):
+            box1, box2 = bboxes[i], bboxes[j]
+            # Cálculo da área de interseção
+            x_overlap = max(0, min(box1[2], box2[2]) - max(box1[0], box2[0]))
+            y_overlap = max(0, min(box1[3], box2[3]) - max(box1[1], box2[1]))
+            area_overlap = x_overlap * y_overlap
+            area_min = min((box1[2]-box1[0])*(box1[3]-box1[1]), 
+                          (box2[2]-box2[0])*(box2[3]-box2[1]))
+            if area_overlap/(area_min + 1e-6) > threshold_overlap:
+                overlap_detectado = True
+                break
+
+    # 3. Verifica velocidade (com persistência entre frames)
+    if not hasattr(detectarTrocaPosicao, 'centros_anteriores'):
+        detectarTrocaPosicao.centros_anteriores = centros
+    
+    speed_detectado = False
+    if centros and detectarTrocaPosicao.centros_anteriores:
+        if len(centros) == len(detectarTrocaPosicao.centros_anteriores):
+            speeds = []
+            diagonal = np.sqrt(frame_shape[0]**2 + frame_shape[1]**2)
+            for (x1, y1), (x2, y2) in zip(detectarTrocaPosicao.centros_anteriores, centros):
+                speed = np.sqrt((x2-x1)**2 + (y2-y1)**2) / diagonal
+                speeds.append(speed)
+            if np.mean(speeds) > threshold_speed:
+                speed_detectado = True
+    
+    detectarTrocaPosicao.centros_anteriores = centros  # Atualiza para o próximo frame
+    return overlap_detectado or speed_detectado
 
 
 
@@ -286,6 +346,7 @@ totalFrames = 0
 angulosPorFrame = []  
 framesAcrobacias = 0
 framesAssincronia = 0
+framesTrocaPosicao = 0
 
 #LOOP PRICIPAL
 cap = cv2.VideoCapture('Kpop-Dance-Practice\\7-pessoas\\O.O\\O.O.mp4')
@@ -304,27 +365,27 @@ while cap.isOpened():
     keypoints = result['output_0'].numpy()[:, :, :51].reshape((6, 17, 3))
 
     # Avaliação de sincronia
-    notaSincronia = avaliar_sincronia_grupo(keypoints)
+    notaSincronia = avaliarSincroniaGrupo(keypoints)
     angulosPorFrame.append(notaSincronia)
 
     # Detecção de acrobacias (e salva frames se necessário)
     isAcrobacia = detectar_acrobacia(keypoints, frame.shape)
-    frame_acrobacia = frame.copy() if isAcrobacia else None
-    
-    # Dentro do loop principal:
-    isAcrobacia = detectar_acrobacia(keypoints, frame.shape)
+    isTrocaPosicao = detectarTrocaPosicao(keypoints, frame.shape, threshold_overlap=0.3, threshold_speed=0.1)
 
-    if not isAcrobacia:  # Só avalia sincronia se NÃO for acrobacia
-        notaSincronia = avaliar_sincronia_grupo(keypoints)
+    # Só avalia sincronia se NÃO for acrobacia NEM troca de posição
+    if not isAcrobacia and not isTrocaPosicao:
+        notaSincronia = avaliarSincroniaGrupo(keypoints)
         angulosPorFrame.append(notaSincronia)
         
-        if notaSincronia < 80:  # Salva frames com baixa sincronia
+        if notaSincronia < 80:
             fileName = f"frames/framesAssincronia/assincronia_{totalFrames:04d}.jpg"
             cv2.imwrite(fileName, frame.copy())
             framesAssincronia += 1
     else:
-        framesAcrobacias += 1
-
+        if isAcrobacia:
+            framesAcrobacias += 1
+        if isTrocaPosicao:
+            framesTrocaPosicao += 1
 
     totalFrames += 1
 
@@ -339,14 +400,14 @@ confiabilidadeModelo = np.mean([calcular_confiabilidade_deteccao(result['output_
 
 
 # Cálculo da nota final (ignorando frames de acrobacia):
-frames_validos = totalFrames - framesAcrobacias
-if frames_validos > 0:
-    nota_final = np.mean(angulosPorFrame)  # Já contém apenas frames não-acrobáticos
+framesValidos = totalFrames - framesAcrobacias - framesTrocaPosicao
+if framesValidos > 0:
+    nota_final = np.mean(angulosPorFrame)
 else:
     nota_final = 0
 
 print("\n=== RELATÓRIO FINAL ===")
-print(f"Nota de sincronia (excluindo acrobacias): {nota_final:.2f}%")
-print(f"Frames analisados: {frames_validos}/{totalFrames} ({(frames_validos/totalFrames)*100:.1f}% válidos)")
-print(f"Frames com baixa sincronia (<80%): {framesAssincronia} ({(framesAssincronia/frames_validos)*100:.1f}% dos válidos)")
+print(f"Nota de sincronia (excluindo acrobacias e trocas de posição): {nota_final:.2f}%")
+print(f"Frames analisados: {framesValidos}/{totalFrames} ({(framesValidos/totalFrames)*100:.1f}% válidos)")
 print(f"Frames de acrobacia: {framesAcrobacias} ({(framesAcrobacias/totalFrames)*100:.1f}%)")
+print(f"Frames de troca de posição: {framesTrocaPosicao} ({(framesTrocaPosicao/totalFrames)*100:.1f}%)")
