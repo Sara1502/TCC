@@ -9,13 +9,9 @@ import os
 from datetime import datetime
 
 
-
-
-# Substitua pelo caminho para a pasta que contém 'saved_model.pb' e 'variables'
 caminho_para_o_modelo = "model"
 
-# Carregar o modelo
-
+# Carrega o modelo
 model = tf.saved_model.load(caminho_para_o_modelo)
 movenet = model.signatures['serving_default']
 
@@ -48,12 +44,11 @@ def loop_through_people(frame, keypoints_with_score, edges, confidence_threshold
 
 def draw_keypoints(frame, keypoints, confidence_threshold):
     y, x, c = frame.shape
-    input_height, input_width =  192, 192 # Ajuste para o tamanho da entrada do modelo
+    input_height, input_width =  192, 192 
     shaped = np.squeeze(np.multiply(keypoints, [input_height, input_width, 1]))
 
-    # Ajuste os keypoints para o tamanho real do frame
-    shaped[:, 0] *= y / input_height  # Ajusta a altura dos keypoints
-    shaped[:, 1] *= x / input_width   # Ajusta a largura dos keypoints
+    shaped[:, 0] *= y / input_height  
+    shaped[:, 1] *= x / input_width   
 
 
     for kp in shaped:
@@ -64,12 +59,11 @@ def draw_keypoints(frame, keypoints, confidence_threshold):
 
 def draw_connections(frame, keypoints, edges, confidence_threshold):
     y, x, c = frame.shape
-    input_height, input_width = 192, 192  # Ajuste para o tamanho da entrada do modelo
+    input_height, input_width = 192, 192  
     shaped = np.squeeze(np.multiply(keypoints, [input_height, input_width, 1]))
 
-    # Ajuste os keypoints para o tamanho real do frame
-    shaped[:, 0] *= y / input_height  # Ajusta a altura dos keypoints
-    shaped[:, 1] *= x / input_width   # Ajusta a largura dos keypoints
+    shaped[:, 0] *= y / input_height  
+    shaped[:, 1] *= x / input_width  
         
     for edge, color in edges.items():
         p1, p2 = edge
@@ -81,7 +75,6 @@ def draw_connections(frame, keypoints, edges, confidence_threshold):
 
 
 def calcular_angulos(pose):
-        """Calcula ângulos articulares para uma pose"""
         angulos = {}
         
         # Cotovelos
@@ -96,12 +89,11 @@ def calcular_angulos(pose):
         if pose[12][2] > 0.3 and pose[14][2] > 0.3 and pose[16][2] > 0.3:
             angulos['joelho_dir'] = calcular_angulo_3pontos(pose[12], pose[14], pose[16])
         
-        # Adicione outras articulações conforme necessário
         return angulos
 
 
 def calcular_angulo_3pontos(a, b, c):
-    """Calcula ângulo em graus entre os pontos a-b-c"""
+    
     ba = np.array([a[0] - b[0], a[1] - b[1]])
     bc = np.array([c[0] - b[0], c[1] - b[1]])
     
@@ -109,9 +101,9 @@ def calcular_angulo_3pontos(a, b, c):
     return np.degrees(np.arccos(np.clip(cosine_angle, -1.0, 1.0)))
 
 
-def avaliar_sincronia_grupo(keypoints, limiar_percent=10):
+def avaliar_sincronia_grupo(keypoints, limiar_percent=5):
     if keypoints is None or keypoints.shape[0] < 2:
-        return 100  # Retorna 100% se não há pessoas suficientes para comparar
+        return 100 
 
     membros_para_analise = [
         (10, 8),  # pé direito até joelho direito
@@ -133,7 +125,7 @@ def avaliar_sincronia_grupo(keypoints, limiar_percent=10):
             if (pessoa[junta_a][2] > 0.3 and pessoa[junta_b][2] > 0.3):
                 dy = pessoa[junta_a][1] - pessoa[junta_b][1]
                 dx = pessoa[junta_a][0] - pessoa[junta_b][0]
-                if dx != 0:  # Evita divisão por zero
+                if dx != 0: 
                     coeficiente = dy / dx
                     coeficientes.append(coeficiente)
 
@@ -148,11 +140,11 @@ def avaliar_sincronia_grupo(keypoints, limiar_percent=10):
                     penalidade_total += penalidade
                 num_comparacoes += 1
     
-    # Calcula a nota (100% - penalidade média)
+    # Calcula a nota 
     if num_comparacoes > 0:
         nota = max(0, 100 - (penalidade_total / num_comparacoes))
     else:
-        nota = 100  # Se não houve comparações válidas, considera perfeito
+        nota = 100  
     
     return nota
 
@@ -172,30 +164,6 @@ def calcular_confiabilidade_deteccao(keypoints_with_score):
                 
     return (keypoints_validos / total_keypoints) * 100 if total_keypoints > 0 else 0
 
-def verificar_erros_graves(keypoints_with_score):
-    """Detecta erros grosseiros como fusão de pessoas"""
-    if len(keypoints_with_score) == 0:
-        return True
-    
-    # Verifica proporções corporais absurdas
-    for pessoa in keypoints_with_score:
-        ombro_esq = pessoa[5]
-        ombro_dir = pessoa[6]
-        quadril_esq = pessoa[11]
-        
-        if ombro_esq[2] > 0.3 and ombro_dir[2] > 0.3 and quadril_esq[2] > 0.3:
-            largura_ombros = abs(ombro_esq[1] - ombro_dir[1])
-            altura_tronco = abs(ombro_esq[0] - quadril_esq[0])
-            
-            # Razão inválida (indicando fusão de pessoas)
-            if largura_ombros / (altura_tronco + 1e-6) > 2.5:
-                return True
-                
-    return False
-
-
-
-
 
 
 def detectar_acrobacia(keypoints_with_score, frame_shape, frame=None, debug=False, output_dir="debug_frames", frame_id=None): 
@@ -210,16 +178,11 @@ def detectar_acrobacia(keypoints_with_score, frame_shape, frame=None, debug=Fals
 
     debug_frame = frame.copy() if (debug and frame is not None) else None
     if debug_frame is not None:
-        # desenha a caixa
         cv2.rectangle(debug_frame, 
                      (margem_lateral, topo_caixa),
                      (largura_frame - margem_lateral, altura_frame),
                      (0, 255, 255), 2)
 
-        # salva a imagem com a caixa desenhada
-        nome_caixa = f"{output_dir}/caixa_{frame_id or datetime.now().strftime('%H%M%S%f')}.jpg"
-        sucesso = cv2.imwrite(nome_caixa, debug_frame)
-        print(f"[DEBUG] Tentativa de salvar imagem da caixa: {nome_caixa} — {'OK' if sucesso else 'FALHOU'}")
 
     for pessoa in keypoints_with_score:
         pe_esq = pessoa[15] if pessoa[15][2] > 0.6 else None
@@ -288,13 +251,13 @@ framesAcrobacias = 0
 framesAssincronia = 0
 
 #LOOP PRICIPAL
-cap = cv2.VideoCapture('Kpop-Dance-Practice\\7-pessoas\\O.O\\O.O.mp4')
+cap = cv2.VideoCapture('Kpop-Dance-Practice\\13-pessoas\\Very-Nice\\Very-Nice.mp4')
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
 
-    # Processamento do frame (detecção com MoveNet)
+    # Processamento do frame 
     img = cv2.resize(frame, (192, 192))
     img_input = tf.expand_dims(img, axis=0)
     img_input = tf.cast(img_input, dtype=tf.int32)
@@ -307,20 +270,17 @@ while cap.isOpened():
     notaSincronia = avaliar_sincronia_grupo(keypoints)
     angulosPorFrame.append(notaSincronia)
 
-    # Detecção de acrobacias (e salva frames se necessário)
+    # Detecção de acrobacias 
     isAcrobacia = detectar_acrobacia(keypoints, frame.shape)
     frame_acrobacia = frame.copy() if isAcrobacia else None
     
-    # Dentro do loop principal:
     isAcrobacia = detectar_acrobacia(keypoints, frame.shape)
 
-    if not isAcrobacia:  # Só avalia sincronia se NÃO for acrobacia
+    if not isAcrobacia:  
         notaSincronia = avaliar_sincronia_grupo(keypoints)
         angulosPorFrame.append(notaSincronia)
         
-        if notaSincronia < 80:  # Salva frames com baixa sincronia
-            fileName = f"frames/framesAssincronia/assincronia_{totalFrames:04d}.jpg"
-            cv2.imwrite(fileName, frame.copy())
+        if notaSincronia < 80:
             framesAssincronia += 1
     else:
         framesAcrobacias += 1
@@ -341,12 +301,12 @@ confiabilidadeModelo = np.mean([calcular_confiabilidade_deteccao(result['output_
 # Cálculo da nota final (ignorando frames de acrobacia):
 frames_validos = totalFrames - framesAcrobacias
 if frames_validos > 0:
-    nota_final = np.mean(angulosPorFrame)  # Já contém apenas frames não-acrobáticos
+    nota_final = np.mean(angulosPorFrame) 
 else:
     nota_final = 0
 
 print("\n=== RELATÓRIO FINAL ===")
 print(f"Nota de sincronia (excluindo acrobacias): {nota_final:.2f}%")
 print(f"Frames analisados: {frames_validos}/{totalFrames} ({(frames_validos/totalFrames)*100:.1f}% válidos)")
-print(f"Frames com baixa sincronia (<80%): {framesAssincronia} ({(framesAssincronia/frames_validos)*100:.1f}% dos válidos)")
 print(f"Frames de acrobacia: {framesAcrobacias} ({(framesAcrobacias/totalFrames)*100:.1f}%)")
+print(f"Nota de confiabilidade: {confiabilidadeModelo:.2f}%")
